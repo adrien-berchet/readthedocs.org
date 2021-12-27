@@ -768,8 +768,12 @@ class Conda(PythonEnvironment):
             dependencies.append(pip_dependencies)
             dependencies.extend(conda_requirements)
             environment.update({'dependencies': dependencies})
-            _, output_filename = tempfile.mkstemp(dir=Path(self.checkout_path) / ".." / "..",
-                                                  suffix=".yml")
+
+            self.config.conda.environment = os.path.join(
+                os.path.dirname(self.config.conda.environment),
+                "__readthedocs__" + os.path.basename(self.config.conda.environment),
+            )
+
             try:
                 outputfile = codecs.open(
                     output_filename,
