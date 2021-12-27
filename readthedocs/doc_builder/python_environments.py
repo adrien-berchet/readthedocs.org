@@ -9,8 +9,6 @@ import logging
 import os
 import shutil
 import tarfile
-import tempfile
-from pathlib import Path
 
 import yaml
 from django.conf import settings
@@ -691,10 +689,9 @@ class Conda(PythonEnvironment):
         if self.project.has_feature(Feature.UPDATE_CONDA_STARTUP):
             self._update_conda_startup()
 
-        conda_env_file = self.config.conda.environment
         if self.project.has_feature(Feature.CONDA_APPEND_CORE_REQUIREMENTS):
-            conda_env_file = self._append_core_requirements()
-            self._show_environment_yaml(conda_env_file)
+            self._append_core_requirements()
+            self._show_environment_yaml()
 
         if all([
                 # The project has CONDA_USES_MAMBA feature enabled and,
@@ -713,17 +710,16 @@ class Conda(PythonEnvironment):
             '--name',
             self.version.slug,
             '--file',
-            conda_env_file,
+            self.config.conda.environment,
             bin_path=None,  # Don't use conda bin that doesn't exist yet
             cwd=self.checkout_path,
         )
 
-    def _show_environment_yaml(self, conda_env_file=None):
+    def _show_environment_yaml(self):
         """Show ``environment.yml`` file in the Build output."""
-        conda_env_file = conda_env_file or self.config.conda.environment
         self.build_env.run(
             'cat',
-            conda_env_file,
+            self.config.conda.environment,
             cwd=self.checkout_path,
         )
 
@@ -771,17 +767,22 @@ class Conda(PythonEnvironment):
             dependencies.append(pip_dependencies)
             dependencies.extend(conda_requirements)
             environment.update({'dependencies': dependencies})
-            _, output_filename = tempfile.mkstemp(dir=Path(self.checkout_path) / ".." / "..",
-                                                  suffix=".yml")
+
+            self.config.conda.environment = os.path.join(
+                os.path.dirname(self.config.conda.environment),
+                "__readthedocs__" + os.path.basename(self.config.conda.environment),
+            )
+
             try:
                 outputfile = codecs.open(
-                    output_filename,
+                    os.path.join(
+                        self.checkout_path,
+                        self.config.conda.environment,
+                    ),
                     encoding='utf-8',
                     mode='w',
                 )
                 yaml.safe_dump(environment, outputfile)
-
-                return output_filename
             except IOError:
                 log.warning(
                     'There was an error while writing the new Conda '
